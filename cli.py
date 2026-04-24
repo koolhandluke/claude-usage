@@ -263,7 +263,7 @@ def cmd_stats():
     conn.close()
 
 
-def cmd_dashboard(projects_dir=None):
+def cmd_dashboard(projects_dir=None, host=None, port=None):
     import webbrowser
     import threading
     import time
@@ -274,8 +274,8 @@ def cmd_dashboard(projects_dir=None):
     print("\nStarting dashboard server...")
     from dashboard import serve
 
-    host = os.environ.get("HOST", "localhost")
-    port = int(os.environ.get("PORT", "8080"))
+    host = host or os.environ.get("HOST", "localhost")
+    port = int(port or os.environ.get("PORT", "8080"))
 
     def open_browser():
         time.sleep(1.0)
@@ -295,7 +295,8 @@ Usage:
   python cli.py scan [--projects-dir PATH]   Scan JSONL files and update database
   python cli.py today                        Show today's usage summary
   python cli.py stats                        Show all-time statistics
-  python cli.py dashboard [--projects-dir PATH]  Scan + start dashboard
+  python cli.py dashboard [--projects-dir PATH] [--host HOST] [--port PORT]
+                                                 Scan + start dashboard
 """
 
 COMMANDS = {
@@ -305,10 +306,10 @@ COMMANDS = {
     "dashboard": cmd_dashboard,
 }
 
-def parse_projects_dir(args):
-    """Extract --projects-dir value from argument list."""
+def parse_named_arg(args, flag):
+    """Extract a --flag VALUE pair from an argument list."""
     for i, arg in enumerate(args):
-        if arg == "--projects-dir" and i + 1 < len(args):
+        if arg == flag and i + 1 < len(args):
             return args[i + 1]
     return None
 
@@ -318,9 +319,16 @@ if __name__ == "__main__":
         sys.exit(0)
 
     command = sys.argv[1]
-    projects_dir = parse_projects_dir(sys.argv[2:])
+    rest = sys.argv[2:]
+    projects_dir = parse_named_arg(rest, "--projects-dir")
 
-    if command in ("scan", "dashboard") and projects_dir:
-        COMMANDS[command](projects_dir=projects_dir)
+    if command == "dashboard":
+        cmd_dashboard(
+            projects_dir=projects_dir,
+            host=parse_named_arg(rest, "--host"),
+            port=parse_named_arg(rest, "--port"),
+        )
+    elif command == "scan" and projects_dir:
+        cmd_scan(projects_dir=projects_dir)
     else:
         COMMANDS[command]()
