@@ -17,12 +17,15 @@ from datetime import datetime, date
 DB_PATH = Path.home() / ".claude" / "usage.db"
 
 PRICING = {
+    "claude-opus-4-7":   {"input":  5.00, "output": 25.00},
     "claude-opus-4-6":   {"input":  5.00, "output": 25.00},
     "claude-opus-4-5":   {"input":  5.00, "output": 25.00},
+    "claude-sonnet-4-7": {"input":  3.00, "output": 15.00},
     "claude-sonnet-4-6": {"input":  3.00, "output": 15.00},
     "claude-sonnet-4-5": {"input":  3.00, "output": 15.00},
-    "claude-haiku-4-5":  {"input":  1.00, "output":  5.00},
+    "claude-haiku-4-7":  {"input":  1.00, "output":  5.00},
     "claude-haiku-4-6":  {"input":  1.00, "output":  5.00},
+    "claude-haiku-4-5":  {"input":  1.00, "output":  5.00},
 }
 
 def get_pricing(model):
@@ -36,7 +39,7 @@ def get_pricing(model):
     # Substring fallback: match model family by keyword
     m = model.lower()
     if "opus" in m:
-        return PRICING["claude-opus-4-6"]
+        return PRICING["claude-opus-4-7"]
     if "sonnet" in m:
         return PRICING["claude-sonnet-4-6"]
     if "haiku" in m:
