@@ -1102,10 +1102,11 @@ function renderCostHotspots() {
   html += '</div>';
 
   html += '<div class="section-title" style="margin-top:12px">Top 5 Most Expensive Sessions</div>';
-  html += '<table><thead><tr><th>Session</th><th>Project</th><th>Model</th><th>Turns</th><th>Duration</th><th>Est. Cost</th></tr></thead><tbody>';
+  html += '<table><thead><tr><th>Session</th><th>Date</th><th>Project</th><th>Model</th><th>Turns</th><th>Duration</th><th>Est. Cost</th></tr></thead><tbody>';
   for (const s of top5Sessions) {
     html += '<tr class="clickable" onclick="openSession(\'' + s.full_session_id + '\')">';
     html += '<td class="muted" style="font-family:monospace">' + s.session_id + '&hellip;</td>';
+    html += '<td class="muted">' + s.last_date + '</td>';
     html += '<td>' + s.project + '</td>';
     html += '<td><span class="model-tag">' + s.model + '</span></td>';
     html += '<td class="num">' + s.turns + '</td>';
@@ -1116,10 +1117,13 @@ function renderCostHotspots() {
   html += '</tbody></table>';
 
   html += '<div class="section-title" style="margin-top:18px">Top 5 Most Expensive Turns</div>';
-  html += '<table><thead><tr><th>Session</th><th>Project</th><th>Model</th><th>Tool</th><th>Input</th><th>Output</th><th>Est. Cost</th></tr></thead><tbody>';
+  html += '<table><thead><tr><th>Session</th><th>Date</th><th>Prompt</th><th>Project</th><th>Model</th><th>Tool</th><th>Input</th><th>Output</th><th>Est. Cost</th></tr></thead><tbody>';
   for (const t of top5Turns) {
+    const preview = t.prompt_preview ? t.prompt_preview.slice(0, 60) + (t.prompt_preview.length > 60 ? '&hellip;' : '') : '-';
     html += '<tr class="clickable" onclick="openSession(\'' + t.full_session_id + '\')">';
     html += '<td class="muted" style="font-family:monospace">' + t.session_id + '&hellip;</td>';
+    html += '<td class="muted">' + t.timestamp_date + '</td>';
+    html += '<td class="muted" title="' + (t.prompt_preview || '').replace(/"/g, '&quot;') + '">' + preview + '</td>';
     html += '<td>' + t.project + '</td>';
     html += '<td><span class="model-tag">' + t.model + '</span></td>';
     html += '<td class="muted">' + (t.tool_name || '-') + '</td>';
