@@ -430,7 +430,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <table>
       <thead><tr>
         <th>Session</th><th>Project</th><th>Prompt</th><th>Time</th><th>Model</th>
-        <th>Tool</th><th>Input</th><th>Output</th><th>Est. Cost</th>
+        <th>Tool</th><th>Input</th><th>Output</th><th>Cache %</th><th>Est. Cost</th>
       </tr></thead>
       <tbody id="expensive-turns-body"></tbody>
     </table>
@@ -574,13 +574,20 @@ function calcBedrockCost(model, inp, out, cacheRead, cacheCreation) {
 
 // ── Cache helpers ──────────────────────────────────────────────────────────
 // ── Hours calculation ────────────────────────────────────────────────────
-function calcHours(sessions) {
+function calcHours(sessions, rangeStart, rangeEnd) {
+  // Clamp session intervals to the selected date range so that a session
+  // spanning multiple days only counts the portion inside the range.
+  const clampStart = rangeStart ? new Date(rangeStart + 'T00:00:00Z') : null;
+  const clampEnd   = rangeEnd   ? new Date(rangeEnd + 'T23:59:59.999Z') : null;
   let totalSessionSecs = 0;
   const intervals = [];
   for (const s of sessions) {
     if (!s.first_ts || !s.last_ts) continue;
-    const t1 = new Date(s.first_ts), t2 = new Date(s.last_ts);
+    let t1 = new Date(s.first_ts), t2 = new Date(s.last_ts);
     if (isNaN(t1) || isNaN(t2)) continue;
+    // Clamp to range
+    if (clampStart && t1 < clampStart) t1 = clampStart;
+    if (clampEnd && t2 > clampEnd) t2 = clampEnd;
     const dur = (t2 - t1) / 1000;
     if (dur <= 0) continue;
     totalSessionSecs += dur;
@@ -814,7 +821,7 @@ function applyFilter() {
   const totalCacheRate = cacheEfficiency(totalCacheRead, totalInput, totalCacheCreation);
   const avgSessionCost = filteredSessions.length > 0 ? totalCost / filteredSessions.length : 0;
 
-  const hours = calcHours(filteredSessions);
+  const hours = calcHours(filteredSessions, cutoff, endDate);
 
   const totals = {
     sessions:       filteredSessions.length,
@@ -958,6 +965,7 @@ function renderExpensiveTurns(topTurns) {
   })).sort((a, b) => b.cost - a.cost).slice(0, 10);
 
   document.getElementById('expensive-turns-body').innerHTML = withCost.map(t => {
+    const cr = cacheEfficiency(t.cache_read, t.input, t.cache_creation);
     const alertClass = t.cost >= 0.50 ? ' cost-alert' : '';
     const costCell = isBillable(t.model)
       ? `<td class="cost">${fmtCost(t.cost)}</td>`
@@ -973,6 +981,7 @@ function renderExpensiveTurns(topTurns) {
       <td class="muted">${t.tool_name || '-'}</td>
       <td class="num">${fmt(t.input)}</td>
       <td class="num">${fmt(t.output)}</td>
+      <td class="num"><span class="cache-dot ${cacheColor(cr)}"></span>${cr.toFixed(0)}%</td>
       ${costCell}
     </tr>`;
   }).join('');
