@@ -58,6 +58,13 @@ def init_db(conn):
         CREATE INDEX IF NOT EXISTS idx_turns_timestamp ON turns(timestamp);
         CREATE INDEX IF NOT EXISTS idx_sessions_first ON sessions(first_timestamp);
     """)
+
+    # Safe migration: add prompt_preview column if missing
+    try:
+        conn.execute("ALTER TABLE turns ADD COLUMN prompt_preview TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+
     conn.commit()
 
 
@@ -72,10 +79,30 @@ def project_name_from_cwd(cwd):
     return parts[-1] if parts else "unknown"
 
 
+def extract_prompt_text(content, max_len=150):
+    """Extract displayable text from a user message's content field."""
+    if isinstance(content, str):
+        return content[:max_len]
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict):
+                if item.get("type") == "tool_result":
+                    continue
+                if item.get("type") == "text":
+                    parts.append(item.get("text", ""))
+            elif isinstance(item, str):
+                parts.append(item)
+        text = " ".join(parts).strip()
+        return text[:max_len]
+    return ""
+
+
 def parse_jsonl_file(filepath):
     """Parse a JSONL file and yield (session_data, turns) tuples."""
     turns = []
     session_meta = {}  # session_id -> dict
+    user_messages = {}  # uuid -> prompt text
 
     try:
         with open(filepath, encoding="utf-8", errors="replace") as f:
@@ -119,6 +146,13 @@ def parse_jsonl_file(filepath):
                     if git_branch and not meta["git_branch"]:
                         meta["git_branch"] = git_branch
 
+                if rtype == "user":
+                    uuid = record.get("uuid")
+                    if uuid:
+                        msg_content = record.get("message", {}).get("content", "")
+                        user_messages[uuid] = extract_prompt_text(msg_content)
+                    continue
+
                 if rtype == "assistant":
                     msg = record.get("message", {})
                     usage = msg.get("usage", {})
@@ -143,6 +177,9 @@ def parse_jsonl_file(filepath):
                     if model:
                         session_meta[session_id]["model"] = model
 
+                    parent_uuid = record.get("parentUuid", "")
+                    prompt_preview = user_messages.get(parent_uuid, "")
+
                     turns.append({
                         "session_id": session_id,
                         "timestamp": timestamp,
@@ -153,6 +190,7 @@ def parse_jsonl_file(filepath):
                         "cache_creation_tokens": cache_creation,
                         "tool_name": tool_name,
                         "cwd": cwd,
+                        "prompt_preview": prompt_preview,
                     })
 
     except Exception as e:
@@ -241,13 +279,14 @@ def insert_turns(conn, turns):
     conn.executemany("""
         INSERT INTO turns
             (session_id, timestamp, model, input_tokens, output_tokens,
-             cache_read_tokens, cache_creation_tokens, tool_name, cwd)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             cache_read_tokens, cache_creation_tokens, tool_name, cwd,
+             prompt_preview)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, [
         (t["session_id"], t["timestamp"], t["model"],
          t["input_tokens"], t["output_tokens"],
          t["cache_read_tokens"], t["cache_creation_tokens"],
-         t["tool_name"], t["cwd"])
+         t["tool_name"], t["cwd"], t.get("prompt_preview", ""))
         for t in turns
     ])
 
@@ -309,11 +348,10 @@ def scan(projects_dir=PROJECTS_DIR, db_path=DB_PATH, verbose=True):
                 # Only process the new lines
                 new_turns = []
                 new_metas = {}
+                incr_user_messages = {}
                 try:
                     with open(filepath, encoding="utf-8", errors="replace") as f:
                         for i, line in enumerate(f):
-                            if i < old_lines:
-                                continue
                             line = line.strip()
                             if not line:
                                 continue
@@ -323,6 +361,18 @@ def scan(projects_dir=PROJECTS_DIR, db_path=DB_PATH, verbose=True):
                                 continue
 
                             rtype = record.get("type")
+
+                            # Track all user messages (including old lines) for parentUuid lookup
+                            if rtype == "user":
+                                uuid = record.get("uuid")
+                                if uuid:
+                                    msg_content = record.get("message", {}).get("content", "")
+                                    incr_user_messages[uuid] = extract_prompt_text(msg_content)
+                                continue
+
+                            if i < old_lines:
+                                continue
+
                             if rtype != "assistant":
                                 continue
 
@@ -346,6 +396,9 @@ def scan(projects_dir=PROJECTS_DIR, db_path=DB_PATH, verbose=True):
                                     tool_name = item.get("name")
                                     break
 
+                            parent_uuid = record.get("parentUuid", "")
+                            prompt_preview = incr_user_messages.get(parent_uuid, "")
+
                             new_turns.append({
                                 "session_id": session_id,
                                 "timestamp": record.get("timestamp", ""),
@@ -356,6 +409,7 @@ def scan(projects_dir=PROJECTS_DIR, db_path=DB_PATH, verbose=True):
                                 "cache_creation_tokens": cache_creation,
                                 "tool_name": tool_name,
                                 "cwd": record.get("cwd", ""),
+                                "prompt_preview": prompt_preview,
                             })
                 except Exception as e:
                     print(f"  Warning: {e}")

@@ -9,7 +9,7 @@ Claude Code writes detailed usage logs locally — token counts, models, session
 
 ![Claude Usage Dashboard](docs/screenshot.png)
 
-**Created by:** [The Product Compass Newsletter](https://www.productcompass.pm)
+**Based on:** [claude-usage](https://github.com/koolhandluke/claude-usage) by Pawel Huryn ([The Product Compass Newsletter](https://www.productcompass.pm))
 
 ---
 
@@ -40,14 +40,14 @@ No `pip install`, no virtual environment, no build step.
 
 ### Windows
 ```
-git clone https://github.com/phuryn/claude-usage
+git clone https://github.com/koolhandluke/claude-usage
 cd claude-usage
 python cli.py dashboard
 ```
 
 ### macOS / Linux
 ```
-git clone https://github.com/phuryn/claude-usage
+git clone https://github.com/koolhandluke/claude-usage
 cd claude-usage
 python3 cli.py dashboard
 ```
